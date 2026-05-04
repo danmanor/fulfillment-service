@@ -39,8 +39,8 @@ var _ = Describe("buildSpec", func() {
 		ipv4 := "10.0.0.0/16"
 		ipv6 := "2001:db8::/48"
 		region := "us-east-1"
-		networkClass := "cudn-net"
-		implementationStrategy := "cudn"
+		networkClass := "cudn_net"
+		implementationStrategy := "cudn_net"
 
 		task := &task{
 			virtualNetwork: privatev1.VirtualNetwork_builder{
@@ -132,8 +132,8 @@ var _ = Describe("buildSpec", func() {
 	It("Handles missing capabilities field", func() {
 		ipv4 := "172.16.0.0/12"
 		region := "us-west-2"
-		networkClass := "cudn-net"
-		implementationStrategy := "cudn"
+		networkClass := "cudn_net"
+		implementationStrategy := "cudn_net"
 
 		task := &task{
 			virtualNetwork: privatev1.VirtualNetwork_builder{

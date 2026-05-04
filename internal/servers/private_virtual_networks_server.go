@@ -357,12 +357,12 @@ func (s *PrivateVirtualNetworksServer) validateNetworkClassReference(ctx context
 		spec.SetNetworkClass(networkClassRef)
 		networkClass = defaultNC
 	} else {
-		// Look up NetworkClass by ID or implementation_strategy using a single List call.
+		// Look up NetworkClass by ID, name, or implementation_strategy using a single List call.
 		// We avoid Get() here because a NotFound error from Get poisons the shared
 		// database transaction (via ReportError), causing subsequent writes to roll back.
 		listResponse, listErr := s.networkClassDao.List().
 			SetFilter(fmt.Sprintf(
-				"this.id == %[1]q || this.implementation_strategy == %[1]q",
+				"this.id == %[1]q || this.metadata.name == %[1]q || this.implementation_strategy == %[1]q",
 				networkClassRef,
 			)).
 			SetLimit(1).
