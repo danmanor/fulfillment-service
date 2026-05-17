@@ -73,7 +73,7 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := publicv1.NewComputeInstancesClient(conn)
 
@@ -125,11 +125,11 @@ func RenderComputeInstance(w io.Writer, ci *publicv1.ComputeInstance) {
 	if ci.GetStatus() != nil {
 		state = strings.TrimPrefix(ci.GetStatus().GetState().String(), "COMPUTE_INSTANCE_STATE_")
 	}
-	fmt.Fprintf(writer, "ID:\t%s\n", ci.GetId())
-	fmt.Fprintf(writer, "Template:\t%s\n", template)
-	fmt.Fprintf(writer, "State:\t%s\n", state)
+	_, _ = fmt.Fprintf(writer, "ID:\t%s\n", ci.GetId())
+	_, _ = fmt.Fprintf(writer, "Template:\t%s\n", template)
+	_, _ = fmt.Fprintf(writer, "State:\t%s\n", state)
 	if ci.GetStatus() != nil && ci.GetStatus().GetLastRestartedAt() != nil {
-		fmt.Fprintf(writer, "Last Restarted At:\t%s\n", ci.GetStatus().GetLastRestartedAt().AsTime().Format(time.RFC3339))
+		_, _ = fmt.Fprintf(writer, "Last Restarted At:\t%s\n", ci.GetStatus().GetLastRestartedAt().AsTime().Format(time.RFC3339))
 	}
-	writer.Flush()
+	_ = writer.Flush()
 }

@@ -72,7 +72,7 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create gRPC connection: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client := publicv1.NewClustersClient(conn)
 
@@ -124,8 +124,8 @@ func RenderCluster(w io.Writer, cluster *publicv1.Cluster) {
 	if cluster.GetStatus() != nil {
 		state = strings.TrimPrefix(cluster.GetStatus().GetState().String(), "CLUSTER_STATE_")
 	}
-	fmt.Fprintf(writer, "ID:\t%s\n", cluster.GetId())
-	fmt.Fprintf(writer, "Template:\t%s\n", template)
-	fmt.Fprintf(writer, "State:\t%s\n", state)
-	writer.Flush()
+	_, _ = fmt.Fprintf(writer, "ID:\t%s\n", cluster.GetId())
+	_, _ = fmt.Fprintf(writer, "Template:\t%s\n", template)
+	_, _ = fmt.Fprintf(writer, "State:\t%s\n", state)
+	_ = writer.Flush()
 }
