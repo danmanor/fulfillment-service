@@ -170,7 +170,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 
 	// Run the migrations:
 	c.logger.InfoContext(ctx, "Running database migrations")
-	err = dbTool.Migrate(ctx)
+	err = dbTool.Migrate(ctx, 0)
 	if err != nil {
 		return err
 	}
@@ -852,6 +852,20 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 	}
 	privatev1.RegisterPublicIPsServer(grpcServer, privatePublicIPsServer)
 
+	// Create the private public IP attachments server:
+	c.logger.InfoContext(ctx, "Creating private public IP attachments server")
+	privatePublicIPAttachmentsServer, err := servers.NewPrivatePublicIPAttachmentsServer().
+		SetLogger(c.logger).
+		SetNotifier(notifier).
+		SetAttributionLogic(privateAttributionLogic).
+		SetTenancyLogic(tenancyLogic).
+		SetMetricsRegisterer(metricsRegisterer).
+		Build()
+	if err != nil {
+		return fmt.Errorf("failed to create private public IP attachments server: %w", err)
+	}
+	privatev1.RegisterPublicIPAttachmentsServer(grpcServer, privatePublicIPAttachmentsServer)
+
 	// Create the public organizations server:
 	c.logger.InfoContext(ctx, "Creating public organizations server")
 	publicOrganizationsServer, err := servers.NewOrganizationsServer().
@@ -924,7 +938,7 @@ func (c *runnerContext) run(cmd *cobra.Command, argv []string) error {
 			if err != nil {
 				return nil, err
 			}
-			return resp.GetObject().GetKubeconfig(), nil
+			return resp.GetObject().GetSpec().GetKubeconfig(), nil
 		},
 	)
 	kvBackend, err := console.NewKubeVirtBackend().
