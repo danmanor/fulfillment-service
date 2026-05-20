@@ -60,11 +60,8 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	c.logger = logging.LoggerFromContext(ctx)
 	c.console = terminal.ConsoleFromContext(ctx)
 
-	cfg, err := config.Load(ctx)
-	if err != nil {
-		return err
-	}
-	if cfg.Address == "" {
+	cfg := config.SettingsFromContext(ctx)
+	if !cfg.Armed() {
 		return fmt.Errorf("there is no configuration, run the 'login' command")
 	}
 
@@ -116,16 +113,18 @@ func buildFilter(ref string) string {
 // RenderCluster writes a formatted description of cluster to w.
 func RenderCluster(w io.Writer, cluster *publicv1.Cluster) {
 	writer := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	template := "-"
+	catalogItem := "-"
 	if cluster.GetSpec() != nil {
-		template = cluster.GetSpec().GetTemplate()
+		if catalogItemID := cluster.GetSpec().GetCatalogItem(); catalogItemID != "" {
+			catalogItem = catalogItemID
+		}
 	}
 	state := "-"
 	if cluster.GetStatus() != nil {
 		state = strings.TrimPrefix(cluster.GetStatus().GetState().String(), "CLUSTER_STATE_")
 	}
 	_, _ = fmt.Fprintf(writer, "ID:\t%s\n", cluster.GetId())
-	_, _ = fmt.Fprintf(writer, "Template:\t%s\n", template)
+	_, _ = fmt.Fprintf(writer, "Catalog Item:\t%s\n", catalogItem)
 	_, _ = fmt.Fprintf(writer, "State:\t%s\n", state)
 	_ = writer.Flush()
 }

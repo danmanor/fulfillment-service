@@ -61,11 +61,8 @@ func (c *runnerContext) run(cmd *cobra.Command, args []string) error {
 	c.logger = logging.LoggerFromContext(ctx)
 	c.console = terminal.ConsoleFromContext(ctx)
 
-	cfg, err := config.Load(ctx)
-	if err != nil {
-		return err
-	}
-	if cfg.Address == "" {
+	cfg := config.SettingsFromContext(ctx)
+	if !cfg.Armed() {
 		return fmt.Errorf("there is no configuration, run the 'login' command")
 	}
 
@@ -117,16 +114,18 @@ func buildFilter(ref string) string {
 // RenderComputeInstance writes a formatted description of ci to w.
 func RenderComputeInstance(w io.Writer, ci *publicv1.ComputeInstance) {
 	writer := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	template := "-"
+	catalogItem := "-"
 	if ci.GetSpec() != nil {
-		template = ci.GetSpec().GetTemplate()
+		if catalogItemID := ci.GetSpec().GetCatalogItem(); catalogItemID != "" {
+			catalogItem = catalogItemID
+		}
 	}
 	state := "-"
 	if ci.GetStatus() != nil {
 		state = strings.TrimPrefix(ci.GetStatus().GetState().String(), "COMPUTE_INSTANCE_STATE_")
 	}
 	_, _ = fmt.Fprintf(writer, "ID:\t%s\n", ci.GetId())
-	_, _ = fmt.Fprintf(writer, "Template:\t%s\n", template)
+	_, _ = fmt.Fprintf(writer, "Catalog Item:\t%s\n", catalogItem)
 	_, _ = fmt.Fprintf(writer, "State:\t%s\n", state)
 	if ci.GetStatus() != nil && ci.GetStatus().GetLastRestartedAt() != nil {
 		_, _ = fmt.Fprintf(writer, "Last Restarted At:\t%s\n", ci.GetStatus().GetLastRestartedAt().AsTime().Format(time.RFC3339))
