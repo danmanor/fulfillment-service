@@ -226,7 +226,7 @@ func (s *PrivateVirtualNetworksServer) checkNoChildReferences(ctx context.Contex
 		return nil
 	}
 
-	filter := fmt.Sprintf("this.spec.virtual_network == %q", virtualNetworkID)
+	filter := fmt.Sprintf("this.spec.virtual_network == '%s'", virtualNetworkID)
 
 	subnetResponse, err := s.subnetDao.List().
 		SetFilter(filter).
