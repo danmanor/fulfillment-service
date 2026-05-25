@@ -69,6 +69,10 @@ var _ = Describe("Private virtual networks server", func() {
 		Expect(err).ToNot(HaveOccurred())
 		err = dao.CreateTables[*privatev1.NetworkClass](ctx)
 		Expect(err).ToNot(HaveOccurred())
+		err = dao.CreateTables[*privatev1.Subnet](ctx)
+		Expect(err).ToNot(HaveOccurred())
+		err = dao.CreateTables[*privatev1.SecurityGroup](ctx)
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	// Helper function to create a NetworkClass for validation tests
@@ -1375,6 +1379,262 @@ var _ = Describe("Private virtual networks server", func() {
 			Expect(status.Code()).To(Equal(grpccodes.InvalidArgument))
 			Expect(err.Error()).To(ContainSubstring("network_class"))
 			Expect(err.Error()).To(ContainSubstring("immutable"))
+		})
+	})
+
+	Describe("Deletion referential integrity", func() {
+		var (
+			vnServer  *PrivateVirtualNetworksServer
+			subnetDao *dao.GenericDAO[*privatev1.Subnet]
+			sgDao     *dao.GenericDAO[*privatev1.SecurityGroup]
+		)
+
+		BeforeEach(func() {
+			var err error
+			vnServer, err = NewPrivateVirtualNetworksServer().
+				SetLogger(logger).
+				SetAttributionLogic(attribution).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			subnetDao, err = dao.NewGenericDAO[*privatev1.Subnet]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+
+			sgDao, err = dao.NewGenericDAO[*privatev1.SecurityGroup]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		createVirtualNetwork := func(ctx context.Context) *privatev1.VirtualNetwork {
+			nc := createNetworkClass(ctx, privatev1.NetworkClassState_NETWORK_CLASS_STATE_READY)
+			createResp, err := vnServer.Create(ctx, privatev1.VirtualNetworksCreateRequest_builder{
+				Object: privatev1.VirtualNetwork_builder{
+					Metadata: privatev1.Metadata_builder{
+						Tenant: "shared",
+					}.Build(),
+					Spec: privatev1.VirtualNetworkSpec_builder{
+						Ipv4Cidr:     proto.String("10.0.0.0/16"),
+						NetworkClass: nc.GetId(),
+						Region:       "us-west-1",
+					}.Build(),
+				}.Build(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+			return createResp.GetObject()
+		}
+
+		It("allows deletion when no child resources exist", func() {
+			vn := createVirtualNetwork(ctx)
+
+			_, err := vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("blocks deletion when a Subnet references the VirtualNetwork", func() {
+			vn := createVirtualNetwork(ctx)
+
+			// Set VN to READY so subnet creation validation passes
+			vnDao, err := dao.NewGenericDAO[*privatev1.VirtualNetwork]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			vn.GetStatus().SetState(privatev1.VirtualNetworkState_VIRTUAL_NETWORK_STATE_READY)
+			_, err = vnDao.Update().SetObject(vn).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a Subnet referencing this VN via DAO
+			subnet := privatev1.Subnet_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "shared",
+					Annotations: map[string]string{
+						"osac.io/owner-reference": vn.GetId(),
+					},
+				}.Build(),
+				Spec: privatev1.SubnetSpec_builder{
+					VirtualNetwork: vn.GetId(),
+					Ipv4Cidr:       proto.String("10.0.1.0/24"),
+				}.Build(),
+			}.Build()
+			_, err = subnetDao.Create().SetObject(subnet).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Attempt to delete VN should fail
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.FailedPrecondition))
+			Expect(err.Error()).To(ContainSubstring("Subnet"))
+			Expect(err.Error()).To(ContainSubstring(vn.GetId()))
+		})
+
+		It("blocks deletion when a SecurityGroup references the VirtualNetwork", func() {
+			vn := createVirtualNetwork(ctx)
+
+			// Create a SecurityGroup referencing this VN via DAO
+			sg := privatev1.SecurityGroup_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "shared",
+					Annotations: map[string]string{
+						"osac.io/owner-reference": vn.GetId(),
+					},
+				}.Build(),
+				Spec: privatev1.SecurityGroupSpec_builder{
+					VirtualNetwork: vn.GetId(),
+				}.Build(),
+			}.Build()
+			_, err := sgDao.Create().SetObject(sg).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Attempt to delete VN should fail
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.FailedPrecondition))
+			Expect(err.Error()).To(ContainSubstring("SecurityGroup"))
+			Expect(err.Error()).To(ContainSubstring(vn.GetId()))
+		})
+
+		It("blocks deletion when both Subnets and SecurityGroups reference the VirtualNetwork", func() {
+			vn := createVirtualNetwork(ctx)
+
+			// Set VN to READY for subnet creation
+			vnDao, err := dao.NewGenericDAO[*privatev1.VirtualNetwork]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			vn.GetStatus().SetState(privatev1.VirtualNetworkState_VIRTUAL_NETWORK_STATE_READY)
+			_, err = vnDao.Update().SetObject(vn).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a Subnet
+			subnet := privatev1.Subnet_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "shared",
+					Annotations: map[string]string{
+						"osac.io/owner-reference": vn.GetId(),
+					},
+				}.Build(),
+				Spec: privatev1.SubnetSpec_builder{
+					VirtualNetwork: vn.GetId(),
+					Ipv4Cidr:       proto.String("10.0.1.0/24"),
+				}.Build(),
+			}.Build()
+			_, err = subnetDao.Create().SetObject(subnet).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a SecurityGroup
+			sg := privatev1.SecurityGroup_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "shared",
+					Annotations: map[string]string{
+						"osac.io/owner-reference": vn.GetId(),
+					},
+				}.Build(),
+				Spec: privatev1.SecurityGroupSpec_builder{
+					VirtualNetwork: vn.GetId(),
+				}.Build(),
+			}.Build()
+			_, err = sgDao.Create().SetObject(sg).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Attempt to delete VN should fail (Subnet check fires first)
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			status, ok := grpcstatus.FromError(err)
+			Expect(ok).To(BeTrue())
+			Expect(status.Code()).To(Equal(grpccodes.FailedPrecondition))
+			Expect(err.Error()).To(ContainSubstring("Subnet"))
+		})
+
+		It("allows deletion after all child resources are removed", func() {
+			vn := createVirtualNetwork(ctx)
+
+			// Create a SecurityGroup referencing this VN
+			sg := privatev1.SecurityGroup_builder{
+				Metadata: privatev1.Metadata_builder{
+					Tenant: "shared",
+					Annotations: map[string]string{
+						"osac.io/owner-reference": vn.GetId(),
+					},
+				}.Build(),
+				Spec: privatev1.SecurityGroupSpec_builder{
+					VirtualNetwork: vn.GetId(),
+				}.Build(),
+			}.Build()
+			sgResp, err := sgDao.Create().SetObject(sg).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Deletion should be blocked
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+
+			// Remove the SecurityGroup
+			_, err = sgDao.Delete().SetId(sgResp.GetObject().GetId()).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Now deletion should succeed
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reports the correct count of referencing Subnets", func() {
+			vn := createVirtualNetwork(ctx)
+
+			// Set VN to READY
+			vnDao, err := dao.NewGenericDAO[*privatev1.VirtualNetwork]().
+				SetLogger(logger).
+				SetTenancyLogic(tenancy).
+				Build()
+			Expect(err).ToNot(HaveOccurred())
+			vn.GetStatus().SetState(privatev1.VirtualNetworkState_VIRTUAL_NETWORK_STATE_READY)
+			_, err = vnDao.Update().SetObject(vn).Do(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create 3 subnets referencing this VN
+			for i := range 3 {
+				subnet := privatev1.Subnet_builder{
+					Metadata: privatev1.Metadata_builder{
+						Tenant: "shared",
+						Annotations: map[string]string{
+							"osac.io/owner-reference": vn.GetId(),
+						},
+					}.Build(),
+					Spec: privatev1.SubnetSpec_builder{
+						VirtualNetwork: vn.GetId(),
+						Ipv4Cidr:       proto.String(fmt.Sprintf("10.0.%d.0/24", i)),
+					}.Build(),
+				}.Build()
+				_, err = subnetDao.Create().SetObject(subnet).Do(ctx)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			_, err = vnServer.Delete(ctx, privatev1.VirtualNetworksDeleteRequest_builder{
+				Id: vn.GetId(),
+			}.Build())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("3 Subnet(s)"))
 		})
 	})
 })
