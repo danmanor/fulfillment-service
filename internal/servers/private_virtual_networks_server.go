@@ -212,13 +212,7 @@ func (s *PrivateVirtualNetworksServer) Update(ctx context.Context,
 
 func (s *PrivateVirtualNetworksServer) Delete(ctx context.Context,
 	request *privatev1.VirtualNetworksDeleteRequest) (response *privatev1.VirtualNetworksDeleteResponse, err error) {
-	id := request.GetId()
-	if id == "" {
-		err = grpcstatus.Errorf(grpccodes.InvalidArgument, "object identifier is mandatory")
-		return
-	}
-
-	if err = s.checkNoChildReferences(ctx, id); err != nil {
+	if err = s.checkNoChildReferences(ctx, request.GetId()); err != nil {
 		return
 	}
 
@@ -228,6 +222,10 @@ func (s *PrivateVirtualNetworksServer) Delete(ctx context.Context,
 
 // checkNoChildReferences verifies that no Subnets or SecurityGroups reference the given VirtualNetwork.
 func (s *PrivateVirtualNetworksServer) checkNoChildReferences(ctx context.Context, virtualNetworkID string) error {
+	if virtualNetworkID == "" {
+		return nil
+	}
+
 	filter := fmt.Sprintf("this.spec.virtual_network == %q", virtualNetworkID)
 
 	subnetResponse, err := s.subnetDao.List().
