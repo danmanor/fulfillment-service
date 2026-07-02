@@ -48,11 +48,11 @@ type FunctionBuilder struct {
 }
 
 type function struct {
-	logger               *slog.Logger
-	hubCache             controllers.HubCache
-	externalIPsClient    privatev1.ExternalIPsClient
+	logger                *slog.Logger
+	hubCache              controllers.HubCache
+	externalIPsClient     privatev1.ExternalIPsClient
 	externalIPPoolsClient privatev1.ExternalIPPoolsClient
-	maskCalculator       *masks.Calculator
+	maskCalculator        *masks.Calculator
 }
 
 type task struct {
@@ -104,11 +104,11 @@ func (b *FunctionBuilder) Build() (result controllers.ReconcilerFunction[*privat
 
 	// Create and populate the object:
 	object := &function{
-		logger:               b.logger,
-		externalIPsClient:    privatev1.NewExternalIPsClient(b.connection),
+		logger:                b.logger,
+		externalIPsClient:     privatev1.NewExternalIPsClient(b.connection),
 		externalIPPoolsClient: privatev1.NewExternalIPPoolsClient(b.connection),
-		hubCache:             b.hubCache,
-		maskCalculator:       masks.NewCalculator().Build(),
+		hubCache:              b.hubCache,
+		maskCalculator:        masks.NewCalculator().Build(),
 	}
 	result = object.run
 	return

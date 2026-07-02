@@ -45,19 +45,19 @@ type FunctionBuilder struct {
 }
 
 type function struct {
-	logger                        *slog.Logger
-	hubCache                      controllers.HubCache
-	externalIPAttachmentsClient   privatev1.ExternalIPAttachmentsClient
-	externalIPsClient             privatev1.ExternalIPsClient
-	maskCalculator                *masks.Calculator
+	logger                      *slog.Logger
+	hubCache                    controllers.HubCache
+	externalIPAttachmentsClient privatev1.ExternalIPAttachmentsClient
+	externalIPsClient           privatev1.ExternalIPsClient
+	maskCalculator              *masks.Calculator
 }
 
 type task struct {
-	r                      *function
-	externalIPAttachment   *privatev1.ExternalIPAttachment
-	hubId                  string
-	hubNamespace           string
-	hubClient              clnt.Client
+	r                    *function
+	externalIPAttachment *privatev1.ExternalIPAttachment
+	hubId                string
+	hubNamespace         string
+	hubClient            clnt.Client
 }
 
 // NewFunction creates a new builder that can then be used to create a new external IP attachment reconciler function.

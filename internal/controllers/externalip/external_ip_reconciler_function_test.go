@@ -594,8 +594,8 @@ var _ = Describe("selectHub", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
-			hubCache:             hubCache,
+			logger:                logger,
+			hubCache:              hubCache,
 			externalIPPoolsClient: poolsClient,
 		}
 
@@ -630,7 +630,7 @@ var _ = Describe("selectHub", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
+			logger:                logger,
 			externalIPPoolsClient: poolsClient,
 		}
 
@@ -657,7 +657,7 @@ var _ = Describe("selectHub", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
+			logger:                logger,
 			externalIPPoolsClient: poolsClient,
 		}
 
@@ -739,11 +739,11 @@ var _ = Describe("hub persistence", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
-			hubCache:             hubCache,
-			externalIPsClient:    externalIPsClient,
+			logger:                logger,
+			hubCache:              hubCache,
+			externalIPsClient:     externalIPsClient,
 			externalIPPoolsClient: poolsClient,
-			maskCalculator:       nil,
+			maskCalculator:        nil,
 		}
 
 		err := f.run(ctx, externalIP)
@@ -790,9 +790,9 @@ var _ = Describe("hub persistence", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
+			logger:                logger,
 			externalIPPoolsClient: poolsClient,
-			maskCalculator:       nil,
+			maskCalculator:        nil,
 		}
 
 		err := f.run(ctx, externalIP)
@@ -906,11 +906,11 @@ var _ = Describe("hub persistence", func() {
 		}.Build()
 
 		f := &function{
-			logger:               logger,
-			hubCache:             hubCache,
-			externalIPsClient:    externalIPsClient,
+			logger:                logger,
+			hubCache:              hubCache,
+			externalIPsClient:     externalIPsClient,
 			externalIPPoolsClient: poolsClient,
-			maskCalculator:       nil,
+			maskCalculator:        nil,
 		}
 
 		// First reconcile: hub="" -> selects hub, returns early, no CR
